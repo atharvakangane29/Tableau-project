@@ -1,6 +1,33 @@
 import jwt
 import datetime
 import uuid
+import os
+import json
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from openai import OpenAI
+from dotenv import load_dotenv
+from typing import List
+
+load_dotenv() # Loads your .env file
+
+app = FastAPI()
+
+# Allow React frontend to communicate with this backend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], 
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+client = OpenAI() # Assumes OPENAI_API_KEY is in .env
+
+class ChatRequest(BaseModel):
+    message: str
+    available_filters: List[str] = [] # New field to accept dynamic context
 
 @app.get("/get-embed-token")
 def get_tableau_jwt():
@@ -8,7 +35,8 @@ def get_tableau_jwt():
     connected_app_client_id = os.getenv("TABLEAU_CLIENT_ID")
     connected_app_secret_id = os.getenv("TABLEAU_SECRET_ID")
     connected_app_secret_key = os.getenv("TABLEAU_SECRET_KEY")
-    user_name = "user@yourdomain.com" # The Tableau user to impersonate
+    # IMPORTANT: Change this to the exact email address you use to log into Tableau Cloud/Server
+    user_name = "atharvak@circulants.com"
 
     token = jwt.encode(
         {
@@ -30,29 +58,34 @@ def get_tableau_jwt():
 
 @app.post("/chat-to-filter")
 def chat_to_filter(req: ChatRequest):
-    system_prompt = """
-You are an AI assistant controlling a Tableau dashboard.
-The dashboard contains patent and exclusivity data.
+    # Convert the list of filters from the frontend into a comma-separated string
+    filters_string = ", ".join(req.available_filters) if req.available_filters else "Unknown"
 
-Available fields: 'Appl_Type', 'Patent_Expire_Date', 'Drug_Substance_Flag', etc.
+    # Use an f-string to dynamically inject the context
+    system_prompt = f"""
+You are an AI assistant controlling a Tableau dashboard.
+
+Based on the current dashboard, the valid fields you can filter on are: {filters_string}
 
 Convert the user's natural language request into a valid JSON object representing Tableau filters.
+Only use the field names provided in the list above.
+
 Use this format exactly:
-{
+{{
   "filters": [
-    {
-      "fieldName": "Appl_Type",
-      "values": ["Value1", "Value2"],
+    {{
+      "fieldName": "Category",
+      "values": ["Technology", "Furniture"],
       "isDateRange": false
-    },
-    {
-       "fieldName": "Patent_Expire_Date",
-       "min": "2001-03-14",
-       "max": "2029-12-31",
+    }},
+    {{
+       "fieldName": "Order Date",
+       "min": "2020-01-01",
+       "max": "2024-12-31",
        "isDateRange": true
-    }
+    }}
   ]
-}
+}}
 Return ONLY valid JSON without markdown.
 """
     

@@ -23,6 +23,7 @@ Pipfile.lock
 # Environment Variables & Secrets
 # ========================
 .env
+backend/.env
 .env.local
 .env.development.local
 .env.test.local
