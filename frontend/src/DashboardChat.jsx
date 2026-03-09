@@ -1,41 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { PowerBIEmbed } from 'powerbi-client-react';
-import { models } from 'powerbi-client';
+import React, { useState, useRef } from 'react';
 import axios from 'axios';
+// Import the Tableau Embedding API
+import { TableauViz } from '@tableau/embedding-api'; 
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
 function DashboardChat() {
-  const [embedConfig, setEmbedConfig] = useState(null);
-  const [reportObj, setReportObj] = useState(null);
   const [chatInput, setChatInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const vizRef = useRef(null);
 
-  useEffect(() => {
-    async function fetchConfig() {
-      try {
-        const response = await axios.get(`${BACKEND_URL}/get-embed-token`);
-        setEmbedConfig({
-          type: 'report',
-          id: response.data.reportId,
-          embedUrl: response.data.embedUrl,
-          accessToken: response.data.embedToken,
-          tokenType: models.TokenType.Embed,
-          settings: {
-            panes: { filters: { expanded: false, visible: false } },
-            navContentPaneEnabled: false,
-          }
-        });
-      } catch (error) {
-        console.error("Error fetching embed token:", error);
-      }
-    }
-    fetchConfig();
-  }, []);
+  // 1. Insert your clean Tableau Public URL here
+  const tableauUrl = "https://public.tableau.com/views/Trial_17728055121880/Dashboard1";
 
   const handleChatSubmit = async (e) => {
     e.preventDefault();
-    if (!reportObj || !chatInput.trim()) return;
+    if (!chatInput.trim() || !vizRef.current) return;
 
     setIsLoading(true);
     try {
@@ -43,8 +23,31 @@ function DashboardChat() {
         message: chatInput
       });
       
-      const newFilters = response.data.filters;
-      await reportObj.setFilters(newFilters);
+      const aiFilters = response.data.filters.filters; 
+      
+      const workbook = vizRef.current.workbook;
+      const activeSheet = workbook.activeSheet;
+      
+      const sheetsToFilter = activeSheet.sheetType === 'dashboard' 
+        ? activeSheet.worksheets 
+        : [activeSheet];
+
+      for (let filter of aiFilters) {
+        for (let sheet of sheetsToFilter) {
+          if (filter.isDateRange) {
+            await sheet.applyRangeFilterAsync(filter.fieldName, {
+              min: new Date(filter.min),
+              max: new Date(filter.max)
+            });
+          } else {
+            await sheet.applyFilterAsync(
+              filter.fieldName, 
+              filter.values, 
+              "replace" 
+            );
+          }
+        }
+      }
       setChatInput("");
     } catch (error) {
       console.error("Failed to apply filters:", error);
@@ -54,49 +57,24 @@ function DashboardChat() {
     }
   };
 
-  if (!embedConfig) return <div style={{ padding: '20px' }}>Loading dashboard configuration...</div>;
-
   return (
     <div style={{ display: 'flex', height: '100vh', fontFamily: 'sans-serif' }}>
       
-      {/* Power BI Embed Section */}
       <div style={{ flex: 3, backgroundColor: '#f3f2f1' }}>
-        <PowerBIEmbed
-          embedConfig={embedConfig}
-          cssClassName="powerbi-frame"
-          getEmbeddedComponent={(embeddedReport) => {
-            setReportObj(embeddedReport);
-          }}
-        />
+        {/* 2. Use the modern web component instead of the iframe/object embed */}
+        <tableau-viz 
+          ref={vizRef}
+          id="tableauViz"       
+          src={tableauUrl}
+          toolbar="hidden" 
+          hide-tabs={true}
+          style={{ width: '100%', height: '100%' }}
+        >
+        </tableau-viz>
       </div>
 
-      {/* Chat Interface Section */}
       <div style={{ flex: 1, padding: '20px', borderLeft: '1px solid #ccc', display: 'flex', flexDirection: 'column' }}>
-        <h2 style={{ margin: '0 0 20px 0' }}>Data Copilot</h2>
-        
-        <div style={{ flex: 1, overflowY: 'auto', marginBottom: '20px', padding: '10px', backgroundColor: '#fafafa', border: '1px solid #eee', borderRadius: '4px' }}>
-            <p style={{ color: '#666', fontSize: '14px' }}>
-              Ask a question to filter the dashboard. Try: <em>"Show me the West region"</em>
-            </p>
-        </div>
-
-        <form onSubmit={handleChatSubmit} style={{ display: 'flex', flexDirection: 'column' }}>
-          <input 
-            type="text" 
-            value={chatInput} 
-            onChange={(e) => setChatInput(e.target.value)} 
-            placeholder="Type your filter request..."
-            style={{ padding: '12px', borderRadius: '4px', border: '1px solid #ccc', marginBottom: '10px' }}
-            disabled={isLoading}
-          />
-          <button 
-            type="submit" 
-            disabled={isLoading}
-            style={{ padding: '12px', backgroundColor: '#0078d4', color: 'white', border: 'none', borderRadius: '4px', cursor: isLoading ? 'not-allowed' : 'pointer' }}
-          >
-             {isLoading ? 'Applying...' : 'Filter Dashboard'}
-          </button>
-        </form>
+          {/* Keep your existing chat UI here (input, button, message list) */}
       </div>
 
     </div>

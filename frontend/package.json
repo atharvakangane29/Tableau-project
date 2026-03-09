@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tableau/embedding-api": "^3.15.1",
+    "axios": "^1.13.6",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

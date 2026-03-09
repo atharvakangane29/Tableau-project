@@ -1,7 +1,8 @@
 fastapi
 uvicorn
-msal
+# msal
 requests
 openai
 pydantic
 python-dotenv
+PyJWT
